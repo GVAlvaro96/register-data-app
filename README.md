@@ -26,3 +26,8 @@ Para levantar el entorno de desarrollo en cualquier máquina:
    ```bash
    git clone [https://github.com/TU_USUARIO/register_data_app.git](https://github.com/TU_USUARIO/register_data_app.git)
    cd register_data_app
+
+2. **Levantar la infraestructura de datos:**
+  ```bash
+  docker-compose up -d
+  * Esto levantará el contenedor de PostgreSQL y un cliente SQL web (Adminer) accesible desde http://localhost:8080.
