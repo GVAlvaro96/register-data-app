@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     DB_PASSWORD: str
     DB_NAME: str
     # En local (Docker), la base de datos está en localhost.
-    DB_HOST: str = "localhost" 
+    DB_HOST: str = "127.0.0.1" 
     DB_PORT: str = "5432"
 
     @property
