@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db_fisio:
     image: postgres:15-alpine

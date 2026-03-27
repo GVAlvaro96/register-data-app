@@ -1,47 +1,43 @@
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from src.db import models
+from src.db.models import Servicio, Paciente
+from src.schemas import ServicioCreate
+from uuid import UUID
 
-# ==========================================
-# GESTIÓN DE PACIENTES
-# ==========================================
-def obtener_o_crear_paciente(db: Session, negocio_id: str, telefono: str, nombre: str = None):
+def create_servicio(db: Session, servicio: ServicioCreate):
+    """Inserta un nuevo servicio en la base de datos."""
+    db_servicio = Servicio(
+        negocio_id=servicio.negocio_id,
+        nombre=servicio.nombre,
+        duracion_minutos=servicio.duracion_minutos,
+        precio=servicio.precio,
+        activo=servicio.activo
+    )
+    db.add(db_servicio)
+    db.commit()
+    db.refresh(db_servicio) # Refrescamos para obtener el UUID autogenerado
+    return db_servicio
+
+def obtener_o_crear_paciente(db: Session, negocio_id: str | UUID, telefono: str, nombre: str = None):
     """
-    Busca un paciente por su teléfono. Si no existe, lo crea.
+    Busca un paciente por su teléfono en un negocio específico. 
+    Si no existe (es su primer mensaje), lo crea automáticamente.
     """
-    paciente = db.query(models.Paciente).filter(
-        models.Paciente.negocio_id == negocio_id,
-        models.Paciente.telefono == telefono
+    paciente = db.query(Paciente).filter(
+        Paciente.negocio_id == negocio_id,
+        Paciente.telefono == telefono
     ).first()
 
     if not paciente:
         # El paciente es nuevo, lo preparamos para insertar
-        paciente = models.Paciente(negocio_id=negocio_id, telefono=telefono, nombre=nombre)
+        paciente = Paciente(negocio_id=negocio_id, telefono=telefono, nombre=nombre)
         db.add(paciente)
         try:
             db.commit()
-            db.refresh(paciente) # Refrescamos para obtener el ID (UUID) autogenerado
+            db.refresh(paciente)
         except IntegrityError:
             db.rollback()
-            # Manejo de concurrencia: si otro hilo insertó este paciente en este 
-            # exacto milisegundo, el UNIQUE constraint fallará. Hacemos rollback y lo buscamos.
-            paciente = db.query(models.Paciente).filter_by(negocio_id=negocio_id, telefono=telefono).first()
+            # Manejo de concurrencia (Race condition)
+            paciente = db.query(Paciente).filter_by(negocio_id=negocio_id, telefono=telefono).first()
     
     return paciente
-
-# ==========================================
-# GESTIÓN DE CITAS
-# ==========================================
-def obtener_citas_del_dia(db: Session, negocio_id: str, fecha_inicio, fecha_fin):
-    """
-    Obtiene todas las citas de un negocio en un rango de fechas.
-    Implementa 'joinedload' para resolver el problema N+1.
-    """
-    return db.query(models.Cita).options(
-        joinedload(models.Cita.paciente),
-        joinedload(models.Cita.servicio)
-    ).filter(
-        models.Cita.negocio_id == negocio_id,
-        models.Cita.fecha_hora >= fecha_inicio,
-        models.Cita.fecha_hora <= fecha_fin
-    ).all()

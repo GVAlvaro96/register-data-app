@@ -8,5 +8,5 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Conectamos nuestro archivo de rutas (endpoints) al servidor principal
-app.include_router(routes.router)
+# Conectamos nuestro archivo de rutas al servidor principal con el prefijo /api
+app.include_router(routes.router, prefix="/api")
