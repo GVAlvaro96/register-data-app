@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     WHATSAPP_VERIFY_TOKEN: str 
     WHATSAPP_PHONE_NUMBER_ID: str
     WHATSAPP_API_TOKEN: str
+    
 
     @property
     def DATABASE_URL(self) -> str:
