@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     WHATSAPP_PHONE_NUMBER_ID: str
     WHATSAPP_API_TOKEN: str
     
+    GOOGLE_CALENDAR_ID: str
 
     @property
     def DATABASE_URL(self) -> str:

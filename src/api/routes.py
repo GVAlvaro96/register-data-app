@@ -5,6 +5,16 @@ from src.db.database import get_db
 from src.schemas import ServicioCreate, ServicioResponse
 from src.db import crud
 from src.services.whatsapp import enviar_mensaje_texto
+from src.services.whatsapp import enviar_mensaje_texto
+from src.services.nlp import analizar_intencion, generar_respuesta_base
+from src.services.state import (
+    obtener_estado, 
+    actualizar_estado, 
+    limpiar_estado, 
+    guardar_dato_reserva, 
+    obtener_dato_reserva
+)
+from src.services.calendar import crear_evento_calendario
 
 router = APIRouter()
 
@@ -74,9 +84,62 @@ async def recibir_mensaje(request: Request, db: Session = Depends(get_db)):
                 
                 print(f"🟢 IN: PACIENTE {paciente.nombre} DICE: {texto_mensaje}")
                 
-                # 2. RESPUESTA AUTOMÁTICA DEL BOT (Outbound)
-                respuesta = f"¡Hola {paciente.nombre}! Soy GEMA, tu asistente virtual 🤖. He recibido tu mensaje: '{texto_mensaje}'. ¿Quieres reservar una cita para hoy?"
+                # 2. COMPROBAMOS LA MEMORIA DEL PACIENTE
+                estado_actual = obtener_estado(telefono_paciente)
+                print(f"🗂️ ESTADO ACTUAL: {estado_actual}")
                 
+                # 3. MÁQUINA DE ESTADOS (FLUJO DE CONVERSACIÓN)
+                if estado_actual == "ESPERANDO_SERVICIO":
+                    servicios = crud.obtener_servicios_activos(db, NEGOCIO_ID_TEST)
+                    if servicios:
+                        servicio_elegido = servicios[0] 
+                        guardar_dato_reserva(telefono_paciente, "servicio_id", servicio_elegido.id)
+                        
+                        respuesta = f"¡Anotado, {paciente.nombre}! 📝 Has elegido '*{servicio_elegido.nombre}*'.\n\n¿Qué día y hora te viene bien? (Ej: Mañana a las 18:00)"
+                        actualizar_estado(telefono_paciente, "ESPERANDO_FECHA")
+                    
+                elif estado_actual == "ESPERANDO_FECHA":
+                    servicio_id = obtener_dato_reserva(telefono_paciente, "servicio_id")
+                    
+                    # Guardamos en Supabase
+                    nueva_cita = crud.crear_cita(
+                        db=db, paciente_id=paciente.id, negocio_id=NEGOCIO_ID_TEST,
+                        servicio_id=servicio_id, notas_fecha=texto_mensaje 
+                    )
+                    
+                    # Guardamos en Google Calendar
+                    enlace = crear_evento_calendario(paciente.nombre, "Servicio Reservado", texto_mensaje)
+                    
+                    respuesta = f"¡Hecho! 🎉 He guardado tu cita formalmente para: *{texto_mensaje}*."
+                    if enlace:
+                        respuesta += f"\nRevisa tu calendario."
+                    
+                    # IMPORTANTE: Esto solo se ejecuta al terminar la reserva
+                    limpiar_estado(telefono_paciente)
+                    
+                else:
+                    # ESTADO 'INICIO'
+                    intencion = analizar_intencion(texto_mensaje)
+                    
+                    if intencion == "RESERVAR":
+                        servicios = crud.obtener_servicios_activos(db, NEGOCIO_ID_TEST)
+                        if servicios:
+                            respuesta = f"¡Perfecto {paciente.nombre}! Aquí tienes nuestros servicios:\n\n"
+                            for i, s in enumerate(servicios, 1):
+                                respuesta += f"*{i}. {s.nombre}* - {s.precio}€\n"
+                            respuesta += "\n¿Cuál te gustaría reservar? (Dime el número)"
+                            
+                            actualizar_estado(telefono_paciente, "ESPERANDO_SERVICIO")
+                        else:
+                            respuesta = "No hay servicios disponibles."
+                            
+                    elif intencion == "CANCELAR":
+                        respuesta = generar_respuesta_base(intencion, paciente.nombre)
+                        limpiar_estado(telefono_paciente)
+                    else:
+                        respuesta = generar_respuesta_base(intencion, paciente.nombre)
+                
+                # 4. ENVIAR AL MÓVIL
                 await enviar_mensaje_texto(telefono_destino=telefono_paciente, texto=respuesta)
 
         return {"status": "success"}
