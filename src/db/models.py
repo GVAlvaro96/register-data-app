@@ -1,15 +1,32 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, Numeric, Uuid, UniqueConstraint
+from sqlalchemy import (
+    Column, 
+    String, 
+    Integer, 
+    Boolean, 
+    DateTime, 
+    ForeignKey, 
+    Text, 
+    Numeric, 
+    Uuid, 
+    UniqueConstraint,
+    Float,
+    JSON
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from src.db.database import Base
 
+# En src/db/models.py
 class Negocio(Base):
     __tablename__ = "negocios"
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     nombre_negocio = Column(String(100), nullable=False)
+    telefono_bot = Column(String(20), unique=True, nullable=True) 
+    google_calendar_id = Column(String(255), nullable=True)
     zona_horaria = Column(String(50), default="Europe/Madrid")
+    config_horario = Column(JSON, nullable=True)
     google_refresh_token = Column(Text, nullable=True)
     plan_suscripcion = Column(String(20), default="FREE")
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
@@ -56,7 +73,8 @@ class Cita(Base):
     paciente_id = Column(Uuid, ForeignKey("pacientes.id", ondelete="CASCADE"), nullable=False)
     servicio_id = Column(Uuid, ForeignKey("servicios.id", ondelete="RESTRICT"), nullable=False)
     fecha_hora = Column(DateTime(timezone=True), nullable=False)
-    estado = Column(String(20), default="CONFIRMADA")
+    google_event_id = Column(String(255), nullable=True)
+    estado = Column(String(20), default="PENDIENTE")
     calendar_event_id = Column(String(255), nullable=True)
     notas = Column(Text, nullable=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now())

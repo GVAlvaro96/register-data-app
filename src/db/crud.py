@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from src.db.models import Servicio, Paciente,Cita
+from src.db.models import Servicio, Paciente,Cita, Negocio
 from src.schemas import ServicioCreate
 from uuid import UUID
 from datetime import datetime
@@ -51,17 +51,38 @@ def obtener_servicios_activos(db: Session, negocio_id: str | UUID):
     ).all()
 
 
-def crear_cita(db: Session, paciente_id, negocio_id, servicio_id, notas_fecha: str):
-    """Crea la reserva real en PostgreSQL"""
+def crear_cita(db: Session, paciente_id: str, negocio_id: str, servicio_id: str, fecha_hora: datetime, notas: str = None, google_event_id: str = None):
     nueva_cita = Cita(
-        paciente_id=paciente_id,
-        negocio_id=negocio_id,
-        servicio_id=servicio_id,
-        fecha_hora=datetime.now(), # Fecha técnica por defecto
-        estado="CONFIRMADA",
-        notas=f"El paciente solicitó: {notas_fecha}" # Guardamos el texto real
+        paciente_id=paciente_id, 
+        negocio_id=negocio_id, 
+        servicio_id=servicio_id, 
+        fecha_hora=fecha_hora,        # <--- Guardamos la hora exacta
+        notas=notas,                  # <--- Guardamos el texto (ej. "el viernes a las 11")
+        google_event_id=google_event_id, # <--- Usamos el ID de Google
+        estado="PENDIENTE"            # <--- Estado por defecto de tu modelo
     )
     db.add(nueva_cita)
     db.commit()
     db.refresh(nueva_cita)
     return nueva_cita
+
+def obtener_citas_pendientes(db: Session, paciente_id: str, negocio_id: str):
+    return db.query(Cita).filter(
+        Cita.paciente_id == paciente_id,
+        Cita.negocio_id == negocio_id,
+        Cita.estado == 'PENDIENTE'   # <--- Buscamos solo las activas
+    ).all()
+
+def cancelar_cita(db: Session, cita_id: str):
+    cita = db.query(Cita).filter(Cita.id == cita_id).first()
+    if cita:
+        cita.estado = 'CANCELADA'
+        db.commit()
+    return cita
+
+def obtener_servicio_por_id(db: Session, servicio_id: str):
+    return db.query(Servicio).filter(Servicio.id == servicio_id).first()
+
+def obtener_negocio_por_telefono(db: Session, telefono_bot: str):
+    """Busca a qué negocio pertenece el número de WhatsApp receptor."""
+    return db.query(Negocio).filter(Negocio.telefono_bot == telefono_bot).first()
