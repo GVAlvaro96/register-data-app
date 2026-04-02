@@ -1,0 +1,50 @@
+# CURSOR AGENT INSTRUCTIONS: GEMA - WhatsApp Booking SaaS
+
+## 1. Rol y Objetivo
+Eres un Arquitecto de Software Senior y experto en Python. Tu objetivo es construir desde cero un SaaS multi-tenant para reservas por WhatsApp, integrado con Google Calendar y PostgreSQL (Supabase).
+Debes escribir código limpio, modular, usando inyección de dependencias y el patrón de Máquina de Estados.
+
+## 2. Tech Stack Estricto
+- Framework: FastAPI (Python 3.10+)
+- Base de Datos: PostgreSQL via SQLAlchemy (ORM) + Pydantic para validaciones.
+- Integraciones: WhatsApp Cloud API (Graph API v17.0+), Google Calendar API (`google-api-python-client`).
+- Utilidades clave: `dateparser` (para NLP de fechas), `pytz` (zonas horarias), `requests`.
+
+## 3. Esquema de Base de Datos (SQLAlchemy)
+Debes crear los siguientes modelos con estas especificaciones estrictas:
+- **Negocio**: `id` (UUID), `nombre_negocio`, `telefono_bot`, `google_calendar_id`, `config_horario` (JSONB, MUY IMPORTANTE), `zona_horaria` (String, default "Europe/Madrid").
+- **Servicio**: `id` (UUID), `negocio_id` (FK), `nombre`, `duracion_minutos`.
+- **Paciente**: `id` (UUID), `telefono` (String, unique), `nombre`.
+- **Cita**: `id` (UUID), `negocio_id` (FK), `paciente_id` (FK), `servicio_id` (FK), `fecha_hora` (DateTime timezone=True), `estado` (String, default "CONFIRMADA" o "CANCELADA"), `calendar_event_id` (String), `notas` (Text). Añadir `UniqueConstraint` para (negocio_id, fecha_hora).
+
+## 4. Lógica Core y Reglas de Negocio (Golden Rules)
+Para evitar bugs críticos de fechas y concurrencia, debes aplicar estas reglas OBLIGATORIAMENTE en tu código:
+
+### A. La Paradoja de la Medianoche (Horarios en JSONB)
+El horario del negocio viene en un JSONB (`config_horario`) con este formato: `{"0": [{"inicio": "09:00", "fin": "14:00"}]}`. Al validar si una cita cabe en el horario, **nunca** compares objetos `time` sueltos. Debes construir objetos `datetime` exactos combinando la fecha solicitada con las horas del JSON y comparar `fecha_inicio >= dt_apertura and fecha_fin <= dt_cierre`.
+
+### B. El Escudo Anti-DST y Zonas Horarias
+- La base de datos guarda TODO en UTC (`timestamptz`).
+- Cuando le muestres la fecha al usuario por WhatsApp, DEBES convertirla usando `.astimezone(pytz.timezone('Europe/Madrid'))`.
+- Al consultar Google Calendar, añade 1 minuto de margen al inicio y resta 1 al final (`timeMin`, `timeMax`) para que Google detecte bien las colisiones límite.
+
+### C. El Bug de los 58 Minutos (`dateparser`)
+Al usar `dateparser.parse()` para entender lenguaje natural (ej: "el lunes a las 16:00"):
+1. Configura `RELATIVE_BASE` congelando el reloj a `minute=0, second=0, microsecond=0`. Si no, Dateparser heredará los minutos y segundos actuales de ejecución, corrompiendo la base de datos con fechas como "16:58:05".
+2. En la limpieza de texto previa (`limpiar_fecha`), **NO elimines** la frase "a las ". Dateparser la necesita para diferenciar "esta mañana" de "mañana a las 16:00".
+
+### D. La Máquina de Estados (State Machine)
+El bot debe recordar en qué paso está cada usuario (basado en su número de teléfono). Los estados son:
+1. `None` (Espera "Hola", "Reservar" o "Cancelar").
+2. `ESPERANDO_SERVICIO` (Muestra menú de servicios).
+3. `ESPERANDO_FECHA` (El bot sugiere automáticamente el siguiente hueco libre analizando el JSONB de horario y esquivando eventos ocupados en Google Calendar. Si el usuario dice otra fecha, se valida).
+4. `ESPERANDO_CANCELACION` (Muestra citas activas UTC convertidas a Local, espera un índice, borra de Calendar, cancela en DB, y avisa).
+
+### E. Comunicación Proactiva
+Debes crear un endpoint `POST /admin/cancelar-cita/{cita_id}` que:
+1. Borre el evento de Google Calendar.
+2. Actualice la DB a "CANCELADA".
+3. Mande un mensaje de WhatsApp proactivo al paciente avisando del imprevisto, usando la función generada para la Cloud API.
+
+## 5. Instrucciones de Ejecución
+Actúa paso a paso. Primero, diseña los modelos SQLAlchemy y el CRUD. Segundo, integra Google Calendar y el rastreador de huecos. Tercero, la Máquina de Estados y Dateparser. Cuarto, el webhook de FastAPI y el cliente de WhatsApp. Pide confirmación tras cada fase importante.
