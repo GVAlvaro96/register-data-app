@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     WHATSAPP_VERIFY_TOKEN: str | None = None
     WHATSAPP_PHONE_NUMBER_ID: str | None = None
 
+    # Google API Key
+    GOOGLE_API_KEY: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

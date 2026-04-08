@@ -18,6 +18,7 @@ class Negocio(Base):
     telefono_bot: Mapped[str] = mapped_column(String, nullable=False)
     whatsapp_phone_id: Mapped[str] = mapped_column(String, nullable=False, server_default="")
     google_calendar_id: Mapped[str] = mapped_column(String, nullable=False)
+    telefono_admin: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # JSONB MUY IMPORTANTE: formato {"0": [{"inicio": "09:00", "fin": "14:00"}]}
     config_horario: Mapped[dict] = mapped_column(JSONB, nullable=False)
@@ -62,6 +63,9 @@ class Cita(Base):
     )
     servicio_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("servicios.id", ondelete="CASCADE"), nullable=False
+    )
+    empleado_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("empleados.id"), nullable=True
     )
 
     # timestamptz (UTC). Guardamos TODO en UTC (regla B).

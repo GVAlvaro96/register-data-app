@@ -19,6 +19,7 @@ class BotEstado(Base):
 
     negocio_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     servicio_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    empleado_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # Sugerencia actual (para ESPERANDO_FECHA).
     sugerencia_start_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

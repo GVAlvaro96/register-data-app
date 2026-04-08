@@ -94,7 +94,13 @@ async def whatsapp_webhook(request: Request) -> Response:
             return Response(status_code=200)
 
         return Response(status_code=200)
-    except Exception:
+    except Exception as e:
+        import traceback
+        print("\n" + "="*50)
+        print(f"🔥 ERROR CRÍTICO EN WEBHOOK:")
+        traceback.print_exc()
+        print("="*50 + "\n")
+        
         await db.rollback()
         return Response(status_code=200)
     finally:

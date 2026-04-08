@@ -1,48 +1,89 @@
-from __future__ import annotations
+# app/utils/dateparser_utils.py
 
-from datetime import datetime
-import re
-from typing import Optional
-
-import dateparser
+import os
+import datetime
 import pytz
+from google import genai
+from dotenv import load_dotenv
+from typing import Optional
+import logging
+from app.core.config import get_settings
 
+settings = get_settings()
 
-def limpiar_fecha(text: str) -> str:
+# 1. Forzar la lectura del archivo .env
+load_dotenv()
+
+# Configuración de Logging
+logger = logging.getLogger(__name__)
+
+# 2. Inicializamos el cliente moderno de Gemini. 
+# Buscará GEMINI_API_KEY, pero por si acaso le pasamos GOOGLE_API_KEY también
+api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key)
+
+async def extract_date_with_gemini(
+    user_input: str, 
+    reference_date: datetime.datetime, 
+    timezone_str: str = "Europe/Madrid"
+) -> Optional[datetime.datetime]:
     """
-    Limpieza previa de texto para dateparser.
-
-    Regla C: NO elimines la frase "a las ".
+    Utiliza Gemini 2.5 Flash para extraer una fecha ISO 8601 de un texto conversacional.
     """
-    s = text.strip()
-    s = re.sub(r"\s+", " ", s)
-    # No tocaremos explícitamente "a las " para no romper la diferenciación.
-    return s
+    
+    # Preparación de la zona horaria
+    try:
+        tz = pytz.timezone(timezone_str)
+        ref_date_localized = reference_date.astimezone(tz)
+    except Exception as e:
+        logger.error(f"Error configurando timezone {timezone_str}: {e}")
+        tz = pytz.timezone("UTC")
+        ref_date_localized = reference_date.astimezone(tz)
 
-
-def parse_user_datetime(text: str, *, tz: pytz.BaseTzInfo, now_local: datetime) -> Optional[datetime]:
+    # Prompt de Sistema Estricto
+    prompt = f"""
+    Eres un extractor de fechas experto. Tu única tarea es convertir lenguaje natural en una fecha ISO 8601.
+    
+    CONTEXTO:
+    - Fecha y hora actual: {ref_date_localized.strftime('%Y-%m-%d %H:%M:%S %Z')}
+    - Zona horaria: {timezone_str}
+    
+    INSTRUCCIONES:
+    1. Analiza el texto del usuario: "{user_input}"
+    2. Si el usuario menciona una hora, asume el día más cercano basado en la fecha actual.
+    3. Devuelve ÚNICAMENTE la fecha en formato ISO 8601 (YYYY-MM-DDTHH:MM:SS) o la palabra 'INVALID' si no es posible determinar una fecha clara.
+    4. No incluyas explicaciones, ni texto adicional, ni markdown.
+    
+    RESPUESTA (SOLO ISO 8601 O 'INVALID'):
     """
-    Parsea lenguaje natural usando dateparser y la RELATIVE_BASE congelada.
 
-    Regla C.1: congelar reloj a minute=0, second=0, microsecond=0.
-    """
-    cleaned = limpiar_fecha(text)
+    try:
+        # Ejecución asíncrona nativa de la nueva API de Google
+        response = await client.aio.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+        
+        result_text = response.text.strip()
 
-    frozen = now_local.replace(minute=0, second=0, microsecond=0)
-    settings = {
-        "RELATIVE_BASE": frozen,
-        "PREFER_DATES_FROM": "future",
-    }
+        if "INVALID" in result_text.upper():
+            logger.warning(f"Gemini no pudo parsear la fecha: {user_input}")
+            return None
 
-    dt = dateparser.parse(cleaned, settings=settings)
-    if not dt:
+        # Limpieza básica de posibles markdown
+        clean_date_str = result_text.replace("```", "").replace("python", "").strip()
+        
+        # Parseo de la fecha resultante
+        parsed_date = datetime.datetime.fromisoformat(clean_date_str)
+        
+        # Aseguramos que la fecha tenga la zona horaria correcta
+        if parsed_date.tzinfo is None:
+            parsed_date = tz.localize(parsed_date)
+        else:
+            parsed_date = parsed_date.astimezone(tz)
+            
+        return parsed_date
+
+    except Exception as e:
+        logger.error(f"Error en extract_date_with_gemini: {str(e)}")
         return None
-
-    if dt.tzinfo is None:
-        # Localizamos en la zona del negocio.
-        dt = tz.localize(dt)
-    else:
-        dt = dt.astimezone(tz)
-
-    return dt
-

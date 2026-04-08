@@ -83,9 +83,11 @@ class CitaBase(BaseModel):
     estado: str = "CONFIRMADA"
     calendar_event_id: str = ""
     notas: str | None = None
+    empleado_id: uuid.UUID | None = None
 
 
 class CitaCreate(CitaBase):
+    empleado_id: uuid.UUID | None = None
     pass
 
 

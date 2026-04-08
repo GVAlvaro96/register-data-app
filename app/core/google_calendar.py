@@ -63,7 +63,9 @@ class GoogleCalendarClient:
         end_utc: datetime,
         summary: str,
         description: str | None = None,
+        color_id: str | None = None
     ) -> str:
+        # Ejecutamos la llamada bloqueante en un hilo para no romper el async.
         return await anyio.to_thread.run_sync(
             self._create_event_sync,
             calendar_id,
@@ -71,6 +73,7 @@ class GoogleCalendarClient:
             end_utc,
             summary,
             description,
+            color_id
         )
 
     def _create_event_sync(
@@ -80,6 +83,7 @@ class GoogleCalendarClient:
         end_utc: datetime,
         summary: str,
         description: str | None,
+        color_id: str | None = None
     ) -> str:
         event_body: dict[str, Any] = {
             "summary": summary,
@@ -88,6 +92,10 @@ class GoogleCalendarClient:
         }
         if description:
             event_body["description"] = description
+            
+        # 🎨 Inyectamos el color dinámico del peluquero
+        if color_id:
+            event_body["colorId"] = str(color_id)
 
         created = (
             self._service.events()
