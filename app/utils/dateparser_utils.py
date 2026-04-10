@@ -50,7 +50,7 @@ async def extract_date_with_gemini(
     
     INSTRUCCIONES:
     1. Analiza el texto del usuario: "{user_input}"
-    2. Si el usuario menciona una hora, asume el día más cercano basado en la fecha actual.
+    2. Si el usuario menciona una hora, asume el día futuro más cercano  basado en la fecha actual.
     3. Devuelve ÚNICAMENTE la fecha en formato ISO 8601 (YYYY-MM-DDTHH:MM:SS) o la palabra 'INVALID' si no es posible determinar una fecha clara.
     4. No incluyas explicaciones, ni texto adicional, ni markdown.
     
