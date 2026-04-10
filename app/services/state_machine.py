@@ -124,7 +124,13 @@ class WhatsAppStateMachine:
         # ESTADO: NONE (Menú Principal)
         # ==========================================
         if estado_actual == "None":
-            if "reservar" in t_norm:
+            # 1. Definimos las raíces de palabras clave (flexibilidad total)
+            claves_reservar = ["reservar","reserv", "cita", "apuntar", "coger", "hueco", "vez"]
+            claves_cancelar = ["cancelar","cancel", "anul", "borrar", "quitar", "no puedo", "imposible"]
+            claves_saludo = ["hola", "buen", "hey", "holi", "buenas", "q tal", "que tal"]
+
+            # 2. Comprobamos la intención: ¿RESERVAR?
+            if any(clave in t_norm for clave in claves_reservar):
                 print("🛒 [LOG ACCIÓN] Intención detectada: RESERVAR. Cargando servicios...")
                 servicios = await servicio_repository.list_by_negocio(db, negocio.id)
                 if not servicios:
@@ -156,7 +162,8 @@ class WhatsAppStateMachine:
                 
                 return {"reply_text": mensaje, "next_estado": "ESPERANDO_SERVICIO"}
 
-            if "cancelar" in t_norm:
+            # 3. Comprobamos la intención: ¿CANCELAR?
+            elif any(clave in t_norm for clave in claves_cancelar):
                 print("🗑️ [LOG ACCIÓN] Intención detectada: CANCELAR. Buscando citas activas...")
                 citas_actives = await cita_repository.list_actives_by_negocio(db, negocio.id)
                 citas_actives = [c for c in citas_actives if c.calendar_event_id]
@@ -167,7 +174,7 @@ class WhatsAppStateMachine:
                         telefono=telefono_sender,
                         defaults={"estado": "None", "cancelacion_citas_ids": None},
                     )
-                    return {"reply_text": "No tienes citas activas para cancelar.", "next_estado": "None"}
+                    return {"reply_text": "No tienes citas activas para cancelar en este momento.", "next_estado": "None"}
 
                 citas_ids = [str(c.id) for c in citas_actives]
                 await bot_estado_repository.upsert(
@@ -190,7 +197,8 @@ class WhatsAppStateMachine:
                 )
                 return {"reply_text": f"Selecciona la cita a cancelar:\n{lista}\nResponde con el número.", "next_estado": "ESPERANDO_CANCELACION"}
 
-            if "hola" in t_norm or "buen" in t_norm or "hey" in t_norm:
+            # 4. Comprobamos la intención: ¿SALUDO?
+            elif any(clave in t_norm for clave in claves_saludo):
                 print("👋 [LOG] Saludo detectado. Mostrando bienvenida personalizada.")
                 nombre = paciente_nombre or "amigo"
                 mensaje = (
@@ -200,8 +208,15 @@ class WhatsAppStateMachine:
                     f"❌ Responde *Cancelar* si necesitas anular la que ya tienes."
                 )
                 return {"reply_text": mensaje, "next_estado": "None"}
-            print("❓ [LOG] Mensaje no reconocido en estado None.")
-            return {"reply_text": "Escribe 'Reservar' o 'Cancelar'.", "next_estado": "None"}
+            
+            # 5. FALLBACK (No ha entendido la intención)
+            else:
+                print(f"❓ [LOG] Mensaje no reconocido en estado None: {t_norm}")
+                mensaje_error = (
+                    "¡Uy, creo que no te he entendido bien! 😅\n\n"
+                    "Dime simplemente si necesitas **coger cita** o si quieres **anular** la que ya tienes."
+                )
+                return {"reply_text": mensaje_error, "next_estado": "None"}
 
         # ==========================================
         # ESTADO: ESPERANDO SERVICIO
