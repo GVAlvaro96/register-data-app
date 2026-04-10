@@ -125,8 +125,8 @@ class WhatsAppStateMachine:
         # ==========================================
         if estado_actual == "None":
             # 1. Definimos las raíces de palabras clave (flexibilidad total)
-            claves_reservar = ["reservar","reserv", "cita", "apuntar", "coger", "hueco", "vez"]
-            claves_cancelar = ["cancelar","cancel", "anul", "borrar", "quitar", "no puedo", "imposible"]
+            claves_reservar = ["reserva","reservar","reserv", "cita", "apuntar", "coger", "hueco", "vez"]
+            claves_cancelar = ["cancelacion","cancelar","cancel", "anul", "borrar", "quitar", "no puedo", "imposible"]
             claves_saludo = ["hola", "buen", "hey", "holi", "buenas", "q tal", "que tal"]
 
             # 2. Comprobamos la intención: ¿RESERVAR?

@@ -3,6 +3,7 @@
 import os
 import datetime
 import pytz
+import dateparser # <-- IMPORTANTE: Añadimos la librería
 from google import genai
 from dotenv import load_dotenv
 from typing import Optional
@@ -18,9 +19,29 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # 2. Inicializamos el cliente moderno de Gemini. 
-# Buscará GEMINI_API_KEY, pero por si acaso le pasamos GOOGLE_API_KEY también
 api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
+
+def extract_date_with_dateparser(user_input: str, timezone_str: str = "Europe/Madrid") -> Optional[datetime.datetime]:
+    """
+    Salvavidas local usando dateparser si Gemini falla.
+    """
+    logger.info(f"🔄 Activando salvavidas local (dateparser) para: '{user_input}'")
+    try:
+        # Configuramos para español y forzamos a que busque en el futuro
+        parsed_date = dateparser.parse(
+            user_input,
+            languages=['es'],
+            settings={
+                'TIMEZONE': timezone_str,
+                'RETURN_AS_TIMEZONE_AWARE': True,
+                'PREFER_DATES_FROM': 'future'
+            }
+        )
+        return parsed_date
+    except Exception as e:
+        logger.error(f"❌ Error en el salvavidas dateparser: {e}")
+        return None
 
 async def extract_date_with_gemini(
     user_input: str, 
@@ -28,9 +49,8 @@ async def extract_date_with_gemini(
     timezone_str: str = "Europe/Madrid"
 ) -> Optional[datetime.datetime]:
     """
-    Utiliza Gemini 2.5 Flash para extraer una fecha ISO 8601 de un texto conversacional.
+    Intenta extraer la fecha con Gemini 2.5 Flash y usa dateparser como respaldo si falla.
     """
-    
     # Preparación de la zona horaria
     try:
         tz = pytz.timezone(timezone_str)
@@ -50,7 +70,7 @@ async def extract_date_with_gemini(
     
     INSTRUCCIONES:
     1. Analiza el texto del usuario: "{user_input}"
-    2. Si el usuario menciona una hora, asume el día futuro más cercano  basado en la fecha actual.
+    2. Si el usuario menciona una hora, asume el día futuro más cercano basado en la fecha actual.
     3. Devuelve ÚNICAMENTE la fecha en formato ISO 8601 (YYYY-MM-DDTHH:MM:SS) o la palabra 'INVALID' si no es posible determinar una fecha clara.
     4. No incluyas explicaciones, ni texto adicional, ni markdown.
     
@@ -58,7 +78,7 @@ async def extract_date_with_gemini(
     """
 
     try:
-        # Ejecución asíncrona nativa de la nueva API de Google
+        # Ejecución asíncrona nativa de la API de Google
         response = await client.aio.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
@@ -67,8 +87,9 @@ async def extract_date_with_gemini(
         result_text = response.text.strip()
 
         if "INVALID" in result_text.upper():
-            logger.warning(f"Gemini no pudo parsear la fecha: {user_input}")
-            return None
+            logger.warning(f"⚠️ Gemini no pudo parsear la fecha: '{user_input}'. Lanzando al salvavidas.")
+            # Si Gemini se rinde con un formato raro, probamos con Dateparser
+            return extract_date_with_dateparser(user_input, timezone_str)
 
         # Limpieza básica de posibles markdown
         clean_date_str = result_text.replace("```", "").replace("python", "").strip()
@@ -85,5 +106,6 @@ async def extract_date_with_gemini(
         return parsed_date
 
     except Exception as e:
-        logger.error(f"Error en extract_date_with_gemini: {str(e)}")
-        return None
+        # AQUÍ ESTÁ LA MAGIA: Si hay error 503, timeout, o cualquier fallo de Google
+        logger.error(f"🔥 Error en API de Gemini: {str(e)}. Activando fallback...")
+        return extract_date_with_dateparser(user_input, timezone_str)
