@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
@@ -39,9 +39,12 @@ class Servicio(Base):
     )
     nombre: Mapped[str] = mapped_column(String, nullable=False)
     duracion_minutos: Mapped[int] = mapped_column(Integer, nullable=False)
+    
+    
+    es_grupal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    aforo_maximo: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     negocio: Mapped[Negocio] = relationship("Negocio", back_populates="servicios", lazy="selectin")
-
 
 class Paciente(Base):
     __tablename__ = "pacientes"
